@@ -5,6 +5,7 @@ from urllib.parse import urljoin, urlparse
 import aiohttp
 from bs4 import BeautifulSoup
 
+from app.crawler.dedup import UrlDeduplicator
 from app.crawler.fetcher import fetch
 
 
@@ -38,7 +39,7 @@ async def worker(
     name: str,
     queue: asyncio.Queue,
     session: aiohttp.ClientSession,
-    visited: set[str],
+    visited: UrlDeduplicator,
     stats: CrawlStats,
     stats_lock: asyncio.Lock,
     max_pages: int,
@@ -66,8 +67,7 @@ async def worker(
 
             if depth < max_depth:
                 for link in extract_links(html, url):
-                    if link not in visited:
-                        visited.add(link)
+                    if visited.mark_seen(link):
                         stats.urls_discovered += 1
                         await queue.put((link, depth + 1))
         finally:
@@ -76,10 +76,11 @@ async def worker(
 
 async def crawl(seed_urls: list[str], num_workers: int = 10, max_pages: int = 50, max_depth: int = 3) -> CrawlStats:
     queue: asyncio.Queue = asyncio.Queue()
-    visited: set[str] = set(seed_urls)
+    visited = UrlDeduplicator()
     stats = CrawlStats()
 
     for url in seed_urls:
+        visited.mark_seen(url)
         await queue.put((url, 0))
 
     stats_lock = asyncio.Lock()
