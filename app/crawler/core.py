@@ -1,12 +1,16 @@
 import asyncio
-from dataclasses import dataclass, field
+import os
+from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse
 
 import aiohttp
+import redis.asyncio as redis
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
 
 from app.crawler.dedup import UrlDeduplicator
 from app.crawler.fetcher import fetch
+from app.crawler.politeness import RateLimiter, RobotsChecker, domain_from_url
 
 
 def extract_links(html: str, base_url: str) -> list[str]:
@@ -42,12 +46,19 @@ async def worker(
     visited: UrlDeduplicator,
     stats: CrawlStats,
     stats_lock: asyncio.Lock,
+    robots: RobotsChecker,
+    rate_limiter: RateLimiter,
     max_pages: int,
     max_depth: int,
 ) -> None:
     while True:
         url, depth = await queue.get()
         try:
+            if not await robots.is_allowed(url):
+                # Disallowed by robots.txt — skip without burning a page slot.
+                # queue.task_done() runs in finally.
+                continue
+
             # Reserve a page slot atomically so concurrent workers cannot
             # both pass the limit check before either increments.
             async with stats_lock:
@@ -57,6 +68,9 @@ async def worker(
                     continue
                 stats.pages_crawled += 1
                 current_count = stats.pages_crawled
+
+            # Space out requests to the same domain before the fetch.
+            await rate_limiter.wait_if_needed(domain_from_url(url))
 
             html = await fetch(session, url)
             if html is None:
@@ -75,31 +89,50 @@ async def worker(
 
 
 async def crawl(seed_urls: list[str], num_workers: int = 10, max_pages: int = 50, max_depth: int = 3) -> CrawlStats:
+    load_dotenv()
+
     queue: asyncio.Queue = asyncio.Queue()
     visited = UrlDeduplicator()
     stats = CrawlStats()
+    robots = RobotsChecker()
+    redis_client = redis.from_url(os.environ["REDIS_URL"], decode_responses=True)
+    rate_limiter = RateLimiter(redis_client)
 
     for url in seed_urls:
         visited.mark_seen(url)
         await queue.put((url, 0))
 
     stats_lock = asyncio.Lock()
-    async with aiohttp.ClientSession() as session:
-        workers = [
-            asyncio.create_task(
-                worker(f"worker-{i}", queue, session, visited, stats, stats_lock, max_pages, max_depth)
-            )
-            for i in range(num_workers)
-        ]
+    try:
+        async with aiohttp.ClientSession() as session:
+            workers = [
+                asyncio.create_task(
+                    worker(
+                        f"worker-{i}",
+                        queue,
+                        session,
+                        visited,
+                        stats,
+                        stats_lock,
+                        robots,
+                        rate_limiter,
+                        max_pages,
+                        max_depth,
+                    )
+                )
+                for i in range(num_workers)
+            ]
 
-        # Wait until every item put on the queue has been processed
-        # (task_done() called for it) - this is how we detect "crawl finished"
-        # without workers needing to coordinate with each other directly.
-        await queue.join()
+            # Wait until every item put on the queue has been processed
+            # (task_done() called for it) - this is how we detect "crawl finished"
+            # without workers needing to coordinate with each other directly.
+            await queue.join()
 
-        for w in workers:
-            w.cancel()
-        await asyncio.gather(*workers, return_exceptions=True)
+            for w in workers:
+                w.cancel()
+            await asyncio.gather(*workers, return_exceptions=True)
+    finally:
+        await redis_client.aclose()
 
     return stats
 
