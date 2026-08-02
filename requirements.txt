@@ -86,6 +86,7 @@ nest-asyncio==1.6.0
 networkx==3.6.1
 notebook==7.4.4
 notebook_shim==0.2.4
+nltk==3.10.1
 numpy==2.3.1
 overrides==7.7.0
 packaging==25.0

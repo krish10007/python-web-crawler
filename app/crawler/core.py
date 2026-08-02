@@ -8,9 +8,14 @@ import redis.asyncio as redis
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
+# session.py reads DATABASE_URL at import time — load .env first.
+load_dotenv()
+
 from app.crawler.dedup import UrlDeduplicator
 from app.crawler.fetcher import fetch
 from app.crawler.politeness import RateLimiter, RobotsChecker, domain_from_url
+from app.db.session import AsyncSessionLocal
+from app.index.tfidf import index_page
 
 
 def extract_links(html: str, base_url: str) -> list[str]:
@@ -48,6 +53,7 @@ async def worker(
     stats_lock: asyncio.Lock,
     robots: RobotsChecker,
     rate_limiter: RateLimiter,
+    index_lock: asyncio.Lock,
     max_pages: int,
     max_depth: int,
 ) -> None:
@@ -79,6 +85,15 @@ async def worker(
 
             print(f"[{name}] ({current_count}/{max_pages}) depth={depth} {url}")
 
+            try:
+                # Serialize index writes so concurrent workers don't deadlock
+                # on get-or-create Term inserts for overlapping vocabulary.
+                async with index_lock:
+                    async with AsyncSessionLocal() as db_session:
+                        await index_page(db_session, url, html)
+            except Exception as exc:
+                print(f"[{name}] indexing failed for {url}: {exc}")
+
             if depth < max_depth:
                 for link in extract_links(html, url):
                     if visited.mark_seen(link):
@@ -89,8 +104,6 @@ async def worker(
 
 
 async def crawl(seed_urls: list[str], num_workers: int = 10, max_pages: int = 50, max_depth: int = 3) -> CrawlStats:
-    load_dotenv()
-
     queue: asyncio.Queue = asyncio.Queue()
     visited = UrlDeduplicator()
     stats = CrawlStats()
@@ -103,6 +116,7 @@ async def crawl(seed_urls: list[str], num_workers: int = 10, max_pages: int = 50
         await queue.put((url, 0))
 
     stats_lock = asyncio.Lock()
+    index_lock = asyncio.Lock()
     try:
         async with aiohttp.ClientSession() as session:
             workers = [
@@ -116,6 +130,7 @@ async def crawl(seed_urls: list[str], num_workers: int = 10, max_pages: int = 50
                         stats_lock,
                         robots,
                         rate_limiter,
+                        index_lock,
                         max_pages,
                         max_depth,
                     )
@@ -131,6 +146,11 @@ async def crawl(seed_urls: list[str], num_workers: int = 10, max_pages: int = 50
             for w in workers:
                 w.cancel()
             await asyncio.gather(*workers, return_exceptions=True)
+
+            async with AsyncSessionLocal() as db_session:
+                from app.index.tfidf import recompute_tfidf_scores
+                await recompute_tfidf_scores(db_session)
+            print("TF-IDF scores recomputed.")
     finally:
         await redis_client.aclose()
 
