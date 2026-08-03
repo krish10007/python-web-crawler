@@ -18,4 +18,9 @@ RUN python -c "import nltk; nltk.download('stopwords'); nltk.download('punkt_tab
 COPY app/ ./app/
 
 EXPOSE 8000
-CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Multiple worker processes so CPU-bound tokenize() (NLTK) in one request
+# cannot stall the entire event loop for all concurrent clients.
+# Rule of thumb: ~2 x CPU cores + 1 for mixed I/O+CPU APIs; 4 is a solid
+# default for a small Docker Desktop / single-vCPU container without
+# oversubscribing a tiny host.
+CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
