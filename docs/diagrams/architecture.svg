@@ -1,0 +1,141 @@
+<svg viewBox="0 0 1200 760" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5568"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="760" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="600" y="40" text-anchor="middle" font-size="24" font-weight="700" fill="#1a202c">Concurrent Web Crawler &amp; TF-IDF Search — Architecture</text>
+
+  <!-- ===================== ROW 1: CRAWL PATH ===================== -->
+  <text x="40" y="90" font-size="15" font-weight="700" fill="#2b6cb0">1. Crawl Path</text>
+
+  <!-- Seed URLs -->
+  <rect x="30" y="105" width="130" height="55" rx="8" fill="#ebf8ff" stroke="#2b6cb0" stroke-width="2"/>
+  <text x="95" y="138" text-anchor="middle" font-size="13" fill="#1a365d">Seed URLs</text>
+
+  <path d="M160 132 L195 132" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- asyncio.Queue -->
+  <rect x="195" y="105" width="140" height="55" rx="8" fill="#ebf8ff" stroke="#2b6cb0" stroke-width="2"/>
+  <text x="265" y="130" text-anchor="middle" font-size="13" fill="#1a365d">asyncio.Queue</text>
+  <text x="265" y="146" text-anchor="middle" font-size="11" fill="#4a5568">(url, depth)</text>
+
+  <path d="M335 132 L370 132" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Worker Pool -->
+  <rect x="370" y="95" width="160" height="75" rx="8" fill="#e6fffa" stroke="#2c7a7b" stroke-width="2"/>
+  <text x="450" y="125" text-anchor="middle" font-size="13" font-weight="700" fill="#1d4044">Worker Pool</text>
+  <text x="450" y="142" text-anchor="middle" font-size="11" fill="#2c7a7b">N concurrent</text>
+  <text x="450" y="157" text-anchor="middle" font-size="11" fill="#2c7a7b">asyncio tasks</text>
+
+  <path d="M530 132 L565 132" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Politeness -->
+  <rect x="565" y="95" width="160" height="75" rx="8" fill="#fffaf0" stroke="#c05621" stroke-width="2"/>
+  <text x="645" y="120" text-anchor="middle" font-size="12" font-weight="700" fill="#7b341e">Politeness Layer</text>
+  <text x="645" y="138" text-anchor="middle" font-size="10.5" fill="#7b341e">RobotsChecker</text>
+  <text x="645" y="153" text-anchor="middle" font-size="10.5" fill="#7b341e">Redis RateLimiter</text>
+
+  <path d="M725 132 L760 132" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Bloom filter -->
+  <rect x="760" y="95" width="160" height="75" rx="8" fill="#faf5ff" stroke="#6b46c1" stroke-width="2"/>
+  <text x="840" y="120" text-anchor="middle" font-size="12" font-weight="700" fill="#44337a">Bloom Filter</text>
+  <text x="840" y="138" text-anchor="middle" font-size="10.5" fill="#44337a">UrlDeduplicator</text>
+  <text x="840" y="153" text-anchor="middle" font-size="10.5" fill="#44337a">(seen-before check)</text>
+
+  <path d="M920 132 L955 132" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Fetch -->
+  <rect x="955" y="95" width="150" height="75" rx="8" fill="#f0fff4" stroke="#276749" stroke-width="2"/>
+  <text x="1030" y="120" text-anchor="middle" font-size="12" font-weight="700" fill="#22543d">Fetch</text>
+  <text x="1030" y="138" text-anchor="middle" font-size="10.5" fill="#22543d">aiohttp.ClientSession</text>
+  <text x="1030" y="153" text-anchor="middle" font-size="10.5" fill="#22543d">→ raw HTML</text>
+
+  <!-- Down to parse row -->
+  <path d="M1030 170 L1030 195 L840 195 L840 220" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Parse / links -->
+  <rect x="760" y="220" width="160" height="70" rx="8" fill="#f0fff4" stroke="#276749" stroke-width="2"/>
+  <text x="840" y="245" text-anchor="middle" font-size="12" font-weight="700" fill="#22543d">Parse (BeautifulSoup)</text>
+  <text x="840" y="262" text-anchor="middle" font-size="10.5" fill="#22543d">extract links</text>
+  <text x="840" y="277" text-anchor="middle" font-size="10.5" fill="#22543d">→ back onto Queue (BFS)</text>
+
+  <!-- loop back to queue -->
+  <path d="M760 255 L265 255 L265 160" stroke="#a0aec0" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+  <text x="500" y="248" text-anchor="middle" font-size="10.5" fill="#718096" font-style="italic">new URLs re-enqueued (BFS discovery loop)</text>
+
+  <path d="M760 255 L595 255" stroke="#4a5568" stroke-width="0" />
+  <path d="M760 262 L565 262 L565 220" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Text processing -->
+  <rect x="565" y="220" width="160" height="70" rx="8" fill="#fff5f7" stroke="#b83280" stroke-width="2"/>
+  <text x="645" y="245" text-anchor="middle" font-size="12" font-weight="700" fill="#702459">Text Processing</text>
+  <text x="645" y="262" text-anchor="middle" font-size="10.5" fill="#702459">NLTK tokenize</text>
+  <text x="645" y="277" text-anchor="middle" font-size="10.5" fill="#702459">+ Porter stem</text>
+
+  <path d="M565 255 L370 255 L370 220" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Write postgres -->
+  <rect x="200" y="220" width="170" height="70" rx="8" fill="#ebf4ff" stroke="#2c5282" stroke-width="2"/>
+  <text x="285" y="243" text-anchor="middle" font-size="12" font-weight="700" fill="#1a365d">Postgres Write</text>
+  <text x="285" y="260" text-anchor="middle" font-size="10.5" fill="#1a365d">pages / terms / postings</text>
+  <text x="285" y="275" text-anchor="middle" font-size="10.5" fill="#1a365d">(tfidf_score = 0.0 for now)</text>
+
+  <!-- ===================== ROW 2: TF-IDF BATCH ===================== -->
+  <text x="40" y="360" font-size="15" font-weight="700" fill="#b7791f">2. TF-IDF Batch Recompute (runs once, after crawl finishes)</text>
+
+  <rect x="30" y="375" width="230" height="60" rx="8" fill="#fffff0" stroke="#b7791f" stroke-width="2"/>
+  <text x="145" y="400" text-anchor="middle" font-size="12" fill="#744210">Postgres: pages / terms /</text>
+  <text x="145" y="417" text-anchor="middle" font-size="12" fill="#744210">postings (crawl complete)</text>
+
+  <path d="M260 405 L300 405" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="300" y="375" width="260" height="60" rx="8" fill="#fffbeb" stroke="#b7791f" stroke-width="2"/>
+  <text x="430" y="397" text-anchor="middle" font-size="12" font-weight="700" fill="#744210">recompute_tfidf_scores()</text>
+  <text x="430" y="414" text-anchor="middle" font-size="10.5" fill="#744210">document_frequency, tf, idf (clamped ≥0)</text>
+
+  <path d="M560 405 L600 405" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="600" y="375" width="220" height="60" rx="8" fill="#fffff0" stroke="#b7791f" stroke-width="2"/>
+  <text x="710" y="397" text-anchor="middle" font-size="12" fill="#744210">postings.tfidf_score</text>
+  <text x="710" y="414" text-anchor="middle" font-size="12" fill="#744210">filled in — index ready</text>
+
+  <!-- ===================== ROW 3: SEARCH PATH ===================== -->
+  <text x="40" y="500" font-size="15" font-weight="700" fill="#2f855a">3. Search Path (client-facing, repeated per query)</text>
+
+  <rect x="30" y="515" width="150" height="55" rx="8" fill="#f0fff4" stroke="#2f855a" stroke-width="2"/>
+  <text x="105" y="548" text-anchor="middle" font-size="13" fill="#22543d">Client</text>
+
+  <path d="M180 542 L215 542" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="215" y="510" width="190" height="65" rx="8" fill="#f0fff4" stroke="#2f855a" stroke-width="2"/>
+  <text x="310" y="535" text-anchor="middle" font-size="12" font-weight="700" fill="#22543d">FastAPI</text>
+  <text x="310" y="552" text-anchor="middle" font-size="11" fill="#22543d">GET /search?q=...</text>
+  <text x="310" y="566" text-anchor="middle" font-size="9.5" fill="#4a5568">(tokenize query, same stemmer)</text>
+
+  <path d="M405 542 L440 542" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="440" y="510" width="230" height="65" rx="8" fill="#ebf4ff" stroke="#2c5282" stroke-width="2"/>
+  <text x="555" y="533" text-anchor="middle" font-size="12" font-weight="700" fill="#1a365d">Postgres Query</text>
+  <text x="555" y="550" text-anchor="middle" font-size="10.5" fill="#1a365d">JOIN terms→postings→pages</text>
+  <text x="555" y="564" text-anchor="middle" font-size="10.5" fill="#1a365d">GROUP BY + SUM(score) + ORDER BY</text>
+
+  <path d="M670 542 L705 542" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="705" y="510" width="220" height="65" rx="8" fill="#f0fff4" stroke="#2f855a" stroke-width="2"/>
+  <text x="815" y="536" text-anchor="middle" font-size="12" font-weight="700" fill="#22543d">Ranked JSON Results</text>
+  <text x="815" y="553" text-anchor="middle" font-size="10.5" fill="#22543d">{url, title, score}</text>
+  <text x="815" y="567" text-anchor="middle" font-size="9.5" fill="#4a5568">p50 ~8ms · p99 ~130ms @ 50 users</text>
+
+  <!-- ===================== INFRA NOTE ===================== -->
+  <rect x="30" y="620" width="1140" height="110" rx="10" fill="#f7fafc" stroke="#cbd5e0" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <text x="600" y="645" text-anchor="middle" font-size="13" font-weight="700" fill="#4a5568">Infrastructure — Docker Compose</text>
+  <text x="600" y="668" text-anchor="middle" font-size="11.5" fill="#4a5568">PostgreSQL 16 (pages / terms / postings, Alembic-managed schema)   ·   Redis 7 (per-domain rate-limit keys)   ·   FastAPI on uvicorn (multi-worker)</text>
+  <text x="600" y="690" text-anchor="middle" font-size="11.5" fill="#718096">Crawler runs as a Python process invoking crawl() — worker count, max_pages, and max_depth are configurable per run</text>
+  <text x="600" y="712" text-anchor="middle" font-size="11.5" fill="#718096">Single command deploy: docker-compose up -d --build</text>
+</svg>

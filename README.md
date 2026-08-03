@@ -10,9 +10,9 @@ Crawl and search share one pipeline:
 
 **Seed URLs** are enqueued on an `asyncio.Queue`. A **worker pool** pulls `(url, depth)` jobs, checks the **politeness layer** (`RobotsChecker` + Redis-backed `RateLimiter`), and consults an in-process **Bloom filter** (`UrlDeduplicator`) so the same URL is not scheduled twice. Allowed URLs are **fetched** with `aiohttp`, parsed with BeautifulSoup, and passed through **NLTK tokenization / stemming**. Each page is written into Postgres as `pages` / `terms` / `postings` rows (raw term frequencies first). After a crawl finishes, a **corpus-wide TF-IDF recompute** fills `document_frequency` and `tfidf_score`. Clients query the index through **`GET /search`** on FastAPI.
 
-![Architecture](docs/diagrams/architecture.png)
+![Architecture](docs/diagrams/architecture.svg)
 
-*Figure: end-to-end data flow from seed URLs through the worker pool, politeness/dedup layers, indexing, and the search API. (Diagram to be added at `docs/diagrams/architecture.png`.)*
+*Figure: end-to-end data flow from seed URLs through the worker pool, politeness/dedup layers, indexing, and the search API. (Diagram to be added at `docs/diagrams/architecture.svg`.)*
 
 Example search UI screenshots belong in [`docs/screenshots/`](docs/screenshots/) (to be added).
 
@@ -235,7 +235,7 @@ app/
 alembic/          # Migrations
 scripts/          # Benchmarks, Locust, NLTK download, TF-IDF recompute utility
 docs/
-├── diagrams/     # architecture.png (Excalidraw export)
+├── diagrams/     # architecture.svg (Excalidraw export)
 └── screenshots/  # Search UI / response screenshots
 ```
 
