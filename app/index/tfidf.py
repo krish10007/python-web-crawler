@@ -115,12 +115,18 @@ async def recompute_tfidf_scores(session: AsyncSession) -> None:
        How rare the term is *across the whole corpus*. A word that appears
        on almost every page ("website", "page") is a weak relevance signal;
        a word that appears on only a few pages is a strong one. We use the
-       smoothed form:
-           idf = ln(N / (1 + df))
+       smoothed, non-negative form:
+           idf = max(0, ln(N / (1 + df)))
        where N is the total number of pages and df (document_frequency) is
        how many distinct pages contain the term. The "+1" in the denominator
        is Laplace smoothing — it avoids division by zero if df is somehow 0
        and gently dampens scores for very rare terms.
+
+       The max(0, ...) clamp matters for small corpora: when a term appears
+       in nearly every document, ln(N / (1 + df)) goes negative. Without
+       clamping, those common terms would *subtract* from a page's score
+       instead of simply contributing nothing. Flooring at 0 means
+       ubiquitous terms are ignored rather than actively hurting relevance.
 
     Final score:
            tfidf_score = tf * idf
@@ -159,7 +165,10 @@ async def recompute_tfidf_scores(session: AsyncSession) -> None:
             continue
 
         tf = posting.term_frequency / word_count
-        idf = math.log(total_page_count / (1 + posting.term.document_frequency))
+        idf = max(
+            0.0,
+            math.log(total_page_count / (1 + posting.term.document_frequency)),
+        )
         posting.tfidf_score = tf * idf
 
     await session.commit()
