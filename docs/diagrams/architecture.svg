@@ -1,7 +1,7 @@
 <svg viewBox="0 0 1200 760" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica, Arial, sans-serif">
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5568"/>
+      <path fill="none" d="M 0 0 L 10 5 L 0 10 z" fill="#4a5568"/>
     </marker>
   </defs>
 
@@ -17,14 +17,14 @@
   <rect x="30" y="105" width="130" height="55" rx="8" fill="#ebf8ff" stroke="#2b6cb0" stroke-width="2"/>
   <text x="95" y="138" text-anchor="middle" font-size="13" fill="#1a365d">Seed URLs</text>
 
-  <path d="M160 132 L195 132" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <path fill="none" d="M160 132 L195 132" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
 
   <!-- asyncio.Queue -->
   <rect x="195" y="105" width="140" height="55" rx="8" fill="#ebf8ff" stroke="#2b6cb0" stroke-width="2"/>
   <text x="265" y="130" text-anchor="middle" font-size="13" fill="#1a365d">asyncio.Queue</text>
   <text x="265" y="146" text-anchor="middle" font-size="11" fill="#4a5568">(url, depth)</text>
 
-  <path d="M335 132 L370 132" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <path fill="none" d="M335 132 L370 132" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
 
   <!-- Worker Pool -->
   <rect x="370" y="95" width="160" height="75" rx="8" fill="#e6fffa" stroke="#2c7a7b" stroke-width="2"/>
@@ -32,7 +32,7 @@
   <text x="450" y="142" text-anchor="middle" font-size="11" fill="#2c7a7b">N concurrent</text>
   <text x="450" y="157" text-anchor="middle" font-size="11" fill="#2c7a7b">asyncio tasks</text>
 
-  <path d="M530 132 L565 132" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <path fill="none" d="M530 132 L565 132" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
 
   <!-- Politeness -->
   <rect x="565" y="95" width="160" height="75" rx="8" fill="#fffaf0" stroke="#c05621" stroke-width="2"/>
@@ -40,7 +40,7 @@
   <text x="645" y="138" text-anchor="middle" font-size="10.5" fill="#7b341e">RobotsChecker</text>
   <text x="645" y="153" text-anchor="middle" font-size="10.5" fill="#7b341e">Redis RateLimiter</text>
 
-  <path d="M725 132 L760 132" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <path fill="none" d="M725 132 L760 132" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
 
   <!-- Bloom filter -->
   <rect x="760" y="95" width="160" height="75" rx="8" fill="#faf5ff" stroke="#6b46c1" stroke-width="2"/>
@@ -48,7 +48,7 @@
   <text x="840" y="138" text-anchor="middle" font-size="10.5" fill="#44337a">UrlDeduplicator</text>
   <text x="840" y="153" text-anchor="middle" font-size="10.5" fill="#44337a">(seen-before check)</text>
 
-  <path d="M920 132 L955 132" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <path fill="none" d="M920 132 L955 132" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
 
   <!-- Fetch -->
   <rect x="955" y="95" width="150" height="75" rx="8" fill="#f0fff4" stroke="#276749" stroke-width="2"/>
@@ -57,7 +57,7 @@
   <text x="1030" y="153" text-anchor="middle" font-size="10.5" fill="#22543d">→ raw HTML</text>
 
   <!-- Down to parse row -->
-  <path d="M1030 170 L1030 195 L840 195 L840 220" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <path fill="none" d="M1030 170 L1030 195 L840 195 L840 220" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
 
   <!-- Parse / links -->
   <rect x="760" y="220" width="160" height="70" rx="8" fill="#f0fff4" stroke="#276749" stroke-width="2"/>
@@ -66,11 +66,11 @@
   <text x="840" y="277" text-anchor="middle" font-size="10.5" fill="#22543d">→ back onto Queue (BFS)</text>
 
   <!-- loop back to queue -->
-  <path d="M760 255 L265 255 L265 160" stroke="#a0aec0" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+  <path fill="none" d="M760 255 L265 255 L265 160" stroke="#a0aec0" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
   <text x="500" y="248" text-anchor="middle" font-size="10.5" fill="#718096" font-style="italic">new URLs re-enqueued (BFS discovery loop)</text>
 
-  <path d="M760 255 L595 255" stroke="#4a5568" stroke-width="0" />
-  <path d="M760 262 L565 262 L565 220" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <path fill="none" d="M760 255 L595 255" stroke="#4a5568" stroke-width="0" />
+  <path fill="none" d="M760 262 L565 262 L565 220" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
 
   <!-- Text processing -->
   <rect x="565" y="220" width="160" height="70" rx="8" fill="#fff5f7" stroke="#b83280" stroke-width="2"/>
@@ -78,7 +78,7 @@
   <text x="645" y="262" text-anchor="middle" font-size="10.5" fill="#702459">NLTK tokenize</text>
   <text x="645" y="277" text-anchor="middle" font-size="10.5" fill="#702459">+ Porter stem</text>
 
-  <path d="M565 255 L370 255 L370 220" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <path fill="none" d="M565 255 L370 255 L370 220" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
 
   <!-- Write postgres -->
   <rect x="200" y="220" width="170" height="70" rx="8" fill="#ebf4ff" stroke="#2c5282" stroke-width="2"/>
@@ -93,13 +93,13 @@
   <text x="145" y="400" text-anchor="middle" font-size="12" fill="#744210">Postgres: pages / terms /</text>
   <text x="145" y="417" text-anchor="middle" font-size="12" fill="#744210">postings (crawl complete)</text>
 
-  <path d="M260 405 L300 405" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <path fill="none" d="M260 405 L300 405" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
 
   <rect x="300" y="375" width="260" height="60" rx="8" fill="#fffbeb" stroke="#b7791f" stroke-width="2"/>
   <text x="430" y="397" text-anchor="middle" font-size="12" font-weight="700" fill="#744210">recompute_tfidf_scores()</text>
   <text x="430" y="414" text-anchor="middle" font-size="10.5" fill="#744210">document_frequency, tf, idf (clamped ≥0)</text>
 
-  <path d="M560 405 L600 405" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <path fill="none" d="M560 405 L600 405" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
 
   <rect x="600" y="375" width="220" height="60" rx="8" fill="#fffff0" stroke="#b7791f" stroke-width="2"/>
   <text x="710" y="397" text-anchor="middle" font-size="12" fill="#744210">postings.tfidf_score</text>
@@ -111,21 +111,21 @@
   <rect x="30" y="515" width="150" height="55" rx="8" fill="#f0fff4" stroke="#2f855a" stroke-width="2"/>
   <text x="105" y="548" text-anchor="middle" font-size="13" fill="#22543d">Client</text>
 
-  <path d="M180 542 L215 542" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <path fill="none" d="M180 542 L215 542" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
 
   <rect x="215" y="510" width="190" height="65" rx="8" fill="#f0fff4" stroke="#2f855a" stroke-width="2"/>
   <text x="310" y="535" text-anchor="middle" font-size="12" font-weight="700" fill="#22543d">FastAPI</text>
   <text x="310" y="552" text-anchor="middle" font-size="11" fill="#22543d">GET /search?q=...</text>
   <text x="310" y="566" text-anchor="middle" font-size="9.5" fill="#4a5568">(tokenize query, same stemmer)</text>
 
-  <path d="M405 542 L440 542" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <path fill="none" d="M405 542 L440 542" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
 
   <rect x="440" y="510" width="230" height="65" rx="8" fill="#ebf4ff" stroke="#2c5282" stroke-width="2"/>
   <text x="555" y="533" text-anchor="middle" font-size="12" font-weight="700" fill="#1a365d">Postgres Query</text>
   <text x="555" y="550" text-anchor="middle" font-size="10.5" fill="#1a365d">JOIN terms→postings→pages</text>
   <text x="555" y="564" text-anchor="middle" font-size="10.5" fill="#1a365d">GROUP BY + SUM(score) + ORDER BY</text>
 
-  <path d="M670 542 L705 542" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <path fill="none" d="M670 542 L705 542" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
 
   <rect x="705" y="510" width="220" height="65" rx="8" fill="#f0fff4" stroke="#2f855a" stroke-width="2"/>
   <text x="815" y="536" text-anchor="middle" font-size="12" font-weight="700" fill="#22543d">Ranked JSON Results</text>
