@@ -14,7 +14,7 @@ Crawl and search share one pipeline:
 
 *Figure: end-to-end data flow from seed URLs through the worker pool, politeness/dedup layers, indexing, and the search API. (Diagram to be added at `docs/diagrams/architecture.svg`.)*
 
-Example search UI screenshots belong in [`docs/screenshots/`](docs/screenshots/) (to be added).
+[`docs/screenshots/`](docs/screenshots/) contains real search-result screenshots from the running API.
 
 ---
 
@@ -69,13 +69,18 @@ Instrumenting `/search` separately timed `tokenize()` vs the DB query: under loa
 
 ### Crawl throughput
 
-Multi-domain seeds (Wikipedia returns HTTP 403 for this bot traffic), `max_pages=300`, `max_depth=3`, ~1 req/s per domain via Redis rate limiting.
+Multi-domain seeds (Wikipedia returns HTTP 403 for this bot traffic), `max_depth=3`, ~1 req/s per domain via Redis rate limiting. Worker-scaling runs used `max_pages=300`; a longer single run used `max_pages=1000`.
 
 | Workers | Pages Crawled | Elapsed (s) | Pages/min |
 |---------|---------------|-------------|-----------|
 | 10 | 300 | 664.33 | 27.10 |
 | 25 | 300 | 484.55 | 37.15 |
 | 50 | 300 | 378.04 | 47.61 |
+| 50 | 1000 | 4855.07 | 12.36 |
+
+Throughput dropped from **47.61 pages/min** (300-page run) to **12.36 pages/min** (1000-page run) for a real scheduling reason, not a worker-pool failure: late in the longer crawl, BFS discovery concentrated the queue on a single high-link-density domain (`rfc-editor.org`), so per-domain rate limiting (~1 req/s) became the dominant bottleneck rather than concurrency. At the scale discussed in [Scaling toward 10M pages](#scaling-toward-10m-pages), queue scheduling would need to prevent one domain from starving others of worker attention (e.g. round-robin across domains or per-domain queue caps).
+
+Final inverted index after the 1000-page crawl (and TF-IDF recompute): **986 pages**, **23,364 terms**, **268,148 postings**.
 
 ### Search API latency
 
@@ -86,6 +91,8 @@ Locust: 50 concurrent users, spawn rate 10/s, 60 s, queries drawn from real high
 | Single uvicorn worker, default DB pool | 13 ms | 560 ms | 127.3 | 0% |
 | Single worker, expanded DB pool (20+30) | 11 ms | 950 ms | 138.9 | 0% |
 | **4 uvicorn workers, expanded pool** | **8 ms** | **130 ms** | **152.3** | **0%** |
+
+Locust’s p50/p99 figures above were measured under **sustained load against already-warm** uvicorn workers. A single cold request immediately after deployment measures higher (~50–70 ms) because of one-time SQLAlchemy query compilation and connection-pool initialization on that worker. Instrumented timing plus `EXPLAIN ANALYZE` confirmed the raw SQL still executes in **~3.7 ms** even at the full **268K-posting** corpus size — indexes are working correctly; the visible cold latency is Python/ORM startup overhead, which is standard for ORM-based services rather than a query-performance bug.
 
 ---
 
@@ -162,13 +169,13 @@ curl "http://localhost:8000/search?q=python+documentation&limit=3"
 
 ## Example search queries
 
-Terms below are **real stems** from the live `terms` table (high `document_frequency` after the multi-domain crawl), e.g. `document` (df=271), `content` (239), `develop` (232), `search` (214), plus `python`-related pages in the index.
+Terms below are **real stems** from the live `terms` table after the full multi-domain crawl (**986 pages** / **23,364 terms** / **268,148 postings**), e.g. `document` (df=488), `content` (459), `search` (453), `develop` (356), plus `python`-related pages in the index.
 
 ```bash
-curl -s "http://localhost:8000/search?q=python+documentation&limit=3"
+curl -s "http://localhost:8000/search?q=python+documentation&limit=5"
 ```
 
-Example response shape (captured from a live run):
+Example response (captured live against the full 1000-page corpus):
 
 ```json
 {
@@ -176,26 +183,36 @@ Example response shape (captured from a live run):
     {
       "url": "https://scikit-learn.org/",
       "title": "scikit-learn: machine learning in Python — scikit-learn 0.16.1 documentation",
-      "score": 0.3524762913391416
+      "score": 0.542500050562249
     },
     {
       "url": "https://www.python.org/doc/versions/",
       "title": "Python documentation by version | Python.org",
-      "score": 0.26368823391822466
+      "score": 0.4155116929351436
     },
     {
       "url": "https://docs.python.org/3/",
       "title": "3.14.6 Documentation",
-      "score": 0.22111036031643808
+      "score": 0.34607948529704113
+    },
+    {
+      "url": "https://docs.python.org/3.16/",
+      "title": "3.16.0a0 Documentation",
+      "score": 0.34607948529704113
+    },
+    {
+      "url": "https://docs.python.org/3.15/",
+      "title": "3.15.0b4 Documentation",
+      "score": 0.34607948529704113
     }
   ],
-  "query_time_ms": 18.797
+  "query_time_ms": 4.299
 }
 ```
 
 Other realistic queries against this corpus: `search`, `document`, `content`, `python`, `license` (stemmed to match indexed tokens).
 
-Add UI / result screenshots under [`docs/screenshots/`](docs/screenshots/) when available.
+Real search-result screenshots live under [`docs/screenshots/`](docs/screenshots/).
 
 ---
 
