@@ -1,14 +1,24 @@
 import asyncio
 import time
 from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 from urllib.robotparser import RobotFileParser
 
 import redis.asyncio as redis
+
+from app.crawler.fetcher import DEFAULT_USER_AGENT
 
 
 def domain_from_url(url: str) -> str:
     """Extract the network location (host[:port]) from a URL."""
     return urlparse(url).netloc
+
+
+def _download_robots_txt(robots_url: str) -> list[str]:
+    """Blocking fetch of robots.txt with a polite User-Agent."""
+    req = Request(robots_url, headers={"User-Agent": DEFAULT_USER_AGENT})
+    with urlopen(req, timeout=15) as resp:
+        return resp.read().decode("utf-8-sig", errors="replace").splitlines()
 
 
 class RobotsChecker:
@@ -41,8 +51,11 @@ class RobotsChecker:
             parser = RobotFileParser()
             parser.set_url(robots_url)
             try:
-                # RobotFileParser.read() is blocking I/O - offload it.
-                await asyncio.to_thread(parser.read)
+                # Fetch with an explicit UA — sites like Wikipedia reject
+                # urllib's default agent, which made read() look like a
+                # total disallow and blocked the whole crawl.
+                lines = await asyncio.to_thread(_download_robots_txt, robots_url)
+                parser.parse(lines)
             except Exception:
                 # Fail open: cache None so we don't retry every URL.
                 self._cache[domain] = None

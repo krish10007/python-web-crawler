@@ -2,6 +2,12 @@ import asyncio
 
 import aiohttp
 
+# Many sites (notably Wikipedia) reject requests with no User-Agent.
+DEFAULT_USER_AGENT = (
+    "AcademicWebCrawler/1.0 (+local educational project; polite crawl)"
+)
+DEFAULT_HEADERS = {"User-Agent": DEFAULT_USER_AGENT}
+
 
 async def fetch(session: aiohttp.ClientSession, url: str) -> str | None:
     """
@@ -10,7 +16,11 @@ async def fetch(session: aiohttp.ClientSession, url: str) -> str | None:
     (timeouts, 404s, broken servers) without crashing the whole run.
     """
     try:
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+        async with session.get(
+            url,
+            headers=DEFAULT_HEADERS,
+            timeout=aiohttp.ClientTimeout(total=15),
+        ) as response:
             if response.status != 200:
                 return None
             return await response.text()

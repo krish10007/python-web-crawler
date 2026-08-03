@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.crawler.dedup import UrlDeduplicator
-from app.crawler.fetcher import fetch
+from app.crawler.fetcher import DEFAULT_HEADERS, fetch
 from app.crawler.politeness import RateLimiter, RobotsChecker, domain_from_url
 from app.db.session import AsyncSessionLocal
 from app.index.tfidf import index_page
@@ -118,7 +118,7 @@ async def crawl(seed_urls: list[str], num_workers: int = 10, max_pages: int = 50
     stats_lock = asyncio.Lock()
     index_lock = asyncio.Lock()
     try:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(headers=DEFAULT_HEADERS) as session:
             workers = [
                 asyncio.create_task(
                     worker(
