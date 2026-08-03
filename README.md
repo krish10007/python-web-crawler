@@ -1,20 +1,14 @@
 # Concurrent Web Crawler & TF-IDF Search Engine
 
-An async Python web crawler and search stack built as a backend systems / algorithms portfolio project. It crawls the web concurrently with `asyncio` and `aiohttp`, deduplicates URLs with a Bloom filter, respects `robots.txt` and per-domain rate limits via Redis, builds a Postgres inverted index with TF-IDF scoring, and exposes search over a FastAPI API — all orchestrated with Docker Compose.
+Async Python crawler and search stack for a backend systems / algorithms portfolio project. Workers crawl concurrently with `asyncio` and `aiohttp`, deduplicate URLs with a Bloom filter, honor `robots.txt` and Redis-backed per-domain rate limits, build a Postgres inverted index scored with TF-IDF, and serve results from a FastAPI app. Everything runs under Docker Compose.
 
 ---
 
 ## Architecture
 
-Crawl and search share one pipeline:
-
-**Seed URLs** are enqueued on an `asyncio.Queue`. A **worker pool** pulls `(url, depth)` jobs, checks the **politeness layer** (`RobotsChecker` + Redis-backed `RateLimiter`), and consults an in-process **Bloom filter** (`UrlDeduplicator`) so the same URL is not scheduled twice. Allowed URLs are **fetched** with `aiohttp`, parsed with BeautifulSoup, and passed through **NLTK tokenization / stemming**. Each page is written into Postgres as `pages` / `terms` / `postings` rows (raw term frequencies first). After a crawl finishes, a **corpus-wide TF-IDF recompute** fills `document_frequency` and `tfidf_score`. Clients query the index through **`GET /search`** on FastAPI.
+Seed URLs go onto an `asyncio.Queue`. A worker pool pulls `(url, depth)` jobs, runs them through the politeness layer (`RobotsChecker` + Redis `RateLimiter`), and checks an in-process Bloom filter (`UrlDeduplicator`) so the same URL is not scheduled twice. Allowed pages are fetched with `aiohttp`, parsed with BeautifulSoup, tokenized/stemmed with NLTK, and written to Postgres as `pages` / `terms` / `postings` (raw term frequencies first). After the crawl, a corpus-wide TF-IDF recompute fills `document_frequency` and `tfidf_score`. Clients hit `GET /search` on FastAPI.
 
 ![Architecture](docs/diagrams/architecture.svg)
-
-*Figure: end-to-end data flow from seed URLs through the worker pool, politeness/dedup layers, indexing, and the search API. (Diagram to be added at `docs/diagrams/architecture.svg`.)*
-
-[`docs/screenshots/`](docs/screenshots/) contains real search-result screenshots from the running API.
 
 ---
 
@@ -37,31 +31,31 @@ Crawl and search share one pipeline:
 
 ### Why asyncio over threading
 
-Crawling is dominated by waiting on the network. An `asyncio` worker pool plus a single shared `aiohttp.ClientSession` overlaps hundreds of in-flight HTTP requests without paying for one OS thread per connection. Shared crawl state (`CrawlStats`, the queue, the Bloom filter, Redis rate-limit keys) stays in one process with `asyncio.Lock` where atomicity matters, instead of coordinating locks across threads.
+Crawling spends most of its time waiting on the network. An `asyncio` worker pool with one shared `aiohttp.ClientSession` keeps a lot of HTTP requests in flight without a thread per connection. Crawl state (`CrawlStats`, the queue, the Bloom filter, Redis rate-limit keys) stays in one process; `asyncio.Lock` covers the few places that need atomic updates. That is simpler than sharing the same structures across threads.
 
 ### Why a Bloom filter over a Python `set`
 
-Exact URL membership in a `set` stores every string (plus CPython object and hash-table overhead) — typically on the order of **~100–200+ bytes per URL**. A Bloom filter at this project's default **0.1%** false-positive rate needs only ~10–15 bits per URL. At large crawl scale that is roughly **two to three orders of magnitude** less memory (commonly cited around **~1000×** vs a naïve set of full URL string objects). The trade-off is intentional: false positives may skip a rare new URL; false negatives never re-crawl a URL already seen.
+A `set` of URL strings costs roughly ~100–200+ bytes per URL once you count CPython object and hash-table overhead. The Bloom filter here targets a 0.1% false-positive rate and needs only ~10–15 bits per URL, which is about ~1000× less memory at large crawl scale (two to three orders of magnitude). The trade-off is deliberate: a false positive might skip a rare new URL; a false negative never re-crawls something already seen.
 
 ### Why TF-IDF is computed in two passes
 
-1. **`index_page`** (during the crawl) writes the `Page`, get-or-creates `Term` rows, and stores raw `term_frequency` with `tfidf_score = 0.0`.
-2. **`recompute_tfidf_scores`** (after the crawl) sets each term's `document_frequency` and computes  
+1. `index_page` (during the crawl) writes the `Page`, get-or-creates `Term` rows, and stores raw `term_frequency` with `tfidf_score = 0.0`.
+2. `recompute_tfidf_scores` (after the crawl) sets each term's `document_frequency` and computes  
    `tf = term_frequency / word_count`,  
    `idf = max(0, ln(N / (1 + df)))`,  
    `tfidf_score = tf × idf`.
 
-IDF is a **corpus-level** statistic. Until every page is indexed, \(N\) and each term's document frequency are unknown, so scores cannot be finalized on the hot crawl path.
+IDF depends on the whole corpus. Until indexing finishes, \(N\) and each term's document frequency are unknown, so final scores cannot be written on the hot crawl path.
 
 ### Why IDF is clamped at zero
 
-On a small corpus, a common term can appear in nearly every document. Then `ln(N / (1 + df))` goes **negative**, so common words *subtract* from a page's score instead of contributing weakly. After observing negative scores in search results (e.g. queries like `domain name` on a ~20-page index), IDF was clamped with `max(0.0, …)` so ubiquitous terms contribute zero rather than punishing relevance.
+On a small corpus a common term can show up in almost every document, so `ln(N / (1 + df))` goes negative and those terms drag scores down instead of adding a little weight. I hit that on queries like `domain name` against a ~20-page index. Clamping with `max(0.0, …)` makes ubiquitous terms contribute zero instead of hurting relevance.
 
 ### Diagnosing the p99 latency regression
 
-Locust at **50 concurrent users** showed **p50 ≈ 13 ms** but **p99 ≈ 560–950 ms** (max ~1–2 s). The first hypothesis was SQLAlchemy pool exhaustion (defaults `pool_size=5`, `max_overflow=10` → max 15 connections). Expanding the pool to `20 + 30` **did not** fix the tail (p99 got worse while RPS barely moved).
+Locust at 50 concurrent users showed p50 ≈ 13 ms but p99 ≈ 560–950 ms (max ~1–2 s). I first blamed SQLAlchemy pool exhaustion (defaults `pool_size=5`, `max_overflow=10` → max 15 connections). Growing the pool to `20 + 30` did not fix the tail; p99 got worse and RPS barely moved.
 
-Instrumenting `/search` separately timed `tokenize()` vs the DB query: under load, **`tokenize_ms` stayed ~0.1 ms** and **`query_ms` ~1–2 ms**, while Locust still reported multi-hundred-ms client latency. The bottleneck was a **single uvicorn worker**: sync NLTK work on the event loop serialized concurrent requests, so clients queued even when each handler's own timings looked fine. Switching the Docker CMD to **`--workers 4`** cut p99 to **~130 ms** and raised RPS to **~152** — the resume-ready number.
+I instrumented `/search` to time `tokenize()` and the DB query separately. Under load, `tokenize_ms` stayed ~0.1 ms and `query_ms` ~1–2 ms, while Locust still saw multi-hundred-ms client latency. The problem was a single uvicorn worker: sync NLTK on the event loop serialized concurrent requests, so clients queued even when each handler looked fast. Switching the Docker CMD to `--workers 4` brought p99 down to ~130 ms and RPS up to ~152.
 
 ---
 
@@ -78,9 +72,9 @@ Multi-domain seeds (Wikipedia returns HTTP 403 for this bot traffic), `max_depth
 | 50 | 300 | 378.04 | 47.61 |
 | 50 | 1000 | 4855.07 | 12.36 |
 
-Throughput dropped from **47.61 pages/min** (300-page run) to **12.36 pages/min** (1000-page run) for a real scheduling reason, not a worker-pool failure: late in the longer crawl, BFS discovery concentrated the queue on a single high-link-density domain (`rfc-editor.org`), so per-domain rate limiting (~1 req/s) became the dominant bottleneck rather than concurrency. At the scale discussed in [Scaling toward 10M pages](#scaling-toward-10m-pages), queue scheduling would need to prevent one domain from starving others of worker attention (e.g. round-robin across domains or per-domain queue caps).
+Throughput fell from 47.61 pages/min on the 300-page run to 12.36 pages/min on the 1000-page run for a scheduling reason, not because the worker pool failed. Late in the longer crawl, BFS discovery piled the queue onto one high-link-density domain (`rfc-editor.org`), so the ~1 req/s per-domain cap became the bottleneck instead of concurrency. At the scale discussed in [Scaling toward 10M pages](#scaling-toward-10m-pages), the queue would need fairer scheduling across domains (round-robin or per-domain caps) so one host cannot starve the rest.
 
-Final inverted index after the 1000-page crawl (and TF-IDF recompute): **986 pages**, **23,364 terms**, **268,148 postings**.
+Final inverted index after the 1000-page crawl (and TF-IDF recompute): 986 pages, 23,364 terms, 268,148 postings.
 
 ### Search API latency
 
@@ -92,7 +86,7 @@ Locust: 50 concurrent users, spawn rate 10/s, 60 s, queries drawn from real high
 | Single worker, expanded DB pool (20+30) | 11 ms | 950 ms | 138.9 | 0% |
 | **4 uvicorn workers, expanded pool** | **8 ms** | **130 ms** | **152.3** | **0%** |
 
-Locust’s p50/p99 figures above were measured under **sustained load against already-warm** uvicorn workers. A single cold request immediately after deployment measures higher (~50–70 ms) because of one-time SQLAlchemy query compilation and connection-pool initialization on that worker. Instrumented timing plus `EXPLAIN ANALYZE` confirmed the raw SQL still executes in **~3.7 ms** even at the full **268K-posting** corpus size — indexes are working correctly; the visible cold latency is Python/ORM startup overhead, which is standard for ORM-based services rather than a query-performance bug.
+Those Locust numbers are under sustained load on already-warm uvicorn workers. A single cold request right after deploy is higher (~50–70 ms) from one-time SQLAlchemy query compilation and connection-pool setup on that worker. Instrumented timings plus `EXPLAIN ANALYZE` show the raw SQL still runs in ~3.7 ms against the full 268K-posting corpus, so the indexes are doing their job. The cold bump is Python/ORM startup cost, not a slow query plan.
 
 ---
 
@@ -102,7 +96,7 @@ Locust’s p50/p99 figures above were measured under **sustained load against al
 
 - Docker & Docker Compose
 - Python 3.11+ (for local scripts / tests)
-- Copy env template and adjust ports if needed (this machine often maps Postgres to **5434** when native Postgres occupies 5432)
+- Copy the env template and adjust ports if needed (this machine often maps Postgres to 5434 when native Postgres already owns 5432)
 
 ```bash
 cp .env.example .env
@@ -115,15 +109,15 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-This starts Postgres, Redis, and the FastAPI service on **http://localhost:8000**.
+This starts Postgres, Redis, and the FastAPI service on http://localhost:8000.
 
-Apply migrations (from the project root, with the venv and `.env` loaded):
+Apply migrations from the project root (venv and `.env` loaded):
 
 ```bash
 python -m alembic upgrade head
 ```
 
-One-time NLTK data (for local crawls / tests):
+One-time NLTK data for local crawls / tests:
 
 ```bash
 python scripts/download_nltk_data.py
@@ -169,7 +163,7 @@ curl "http://localhost:8000/search?q=python+documentation&limit=3"
 
 ## Example search queries
 
-Terms below are **real stems** from the live `terms` table after the full multi-domain crawl (**986 pages** / **23,364 terms** / **268,148 postings**), e.g. `document` (df=488), `content` (459), `search` (453), `develop` (356), plus `python`-related pages in the index.
+Stems below come from the live `terms` table after the full multi-domain crawl (986 pages / 23,364 terms / 268,148 postings), e.g. `document` (df=488), `content` (459), `search` (453), `develop` (356), plus `python`-related pages in the index.
 
 ```bash
 curl -s "http://localhost:8000/search?q=python+documentation&limit=5"
@@ -210,22 +204,20 @@ Example response (captured live against the full 1000-page corpus):
 }
 ```
 
-Other realistic queries against this corpus: `search`, `document`, `content`, `python`, `license` (stemmed to match indexed tokens).
-
-Real search-result screenshots live under [`docs/screenshots/`](docs/screenshots/).
+Other queries that hit this corpus well: `search`, `document`, `content`, `python`, `license` (stemmed to match indexed tokens).
 
 ---
 
 ## Testing
 
-The suite under `app/tests/` currently includes **12 tests**:
+`app/tests/` has 12 tests covering:
 
 - Bloom filter dedup (including a bounded false-positive-rate check)
 - Tokenizer (stopwords, stemming, non-alphabetic filtering)
 - TF-IDF (`compute_term_frequencies` + integration proving rare terms outrank common ones; non-negative scores)
 - FastAPI `/health` and `/search` (dependency-overridden session)
 
-Tests use an **isolated `crawler_db_test`** database derived from `DATABASE_URL` (created/dropped per pytest session) so they never touch the production crawl data in `crawler_db`.
+Tests use an isolated `crawler_db_test` database derived from `DATABASE_URL` (created/dropped per pytest session) so they never touch crawl data in `crawler_db`.
 
 ```bash
 pytest -v
@@ -260,11 +252,11 @@ docs/
 
 ## Scaling toward 10M pages
 
-This codebase is intentionally a **single-process** design for clarity. At much larger scale you would typically:
+This stays a single-process design on purpose so the code is easy to follow. At much larger scale you would typically:
 
-- Replace the in-process `asyncio.Queue` with a **distributed queue** (Redis Streams, SQS, Kafka) so many crawler hosts can share work
-- Move URL dedup from an in-process Bloom filter to a **shared store** (Redis Bloom / Redis Set) so instances agree on “seen”
-- **Shard** the Postgres inverted index (or move hot postings to a search engine such as OpenSearch) as term/page cardinality grows
+- Replace the in-process `asyncio.Queue` with a distributed queue (Redis Streams, SQS, Kafka) so many crawler hosts can share work
+- Move URL dedup from an in-process Bloom filter to a shared store (Redis Bloom / Redis Set) so instances agree on “seen”
+- Shard the Postgres inverted index (or move hot postings to something like OpenSearch) as term/page cardinality grows
 - Keep politeness global: one Redis rate-limit keyspace and robots cache shared across the fleet
 - Run API replicas behind a load balancer; keep uvicorn multi-worker (or an async pool) so CPU-bound tokenization does not serialize traffic on one event loop
 
